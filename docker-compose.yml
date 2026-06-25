@@ -1,85 +1,73 @@
+version: '3.8'
+
 services:
-
-  wordpress-db:
-    image: mariadb:10.11
-    container_name: wordpress-db
+  wordpress:
+    image: wordpress:latest
+    container_name: wp_app
     restart: always
-
+    ports:
+      - "8080:80"
     environment:
-      MARIADB_ROOT_PASSWORD: rootpassword
-      MARIADB_DATABASE: wordpressdb
-      MARIADB_USER: wpuser
-      MARIADB_PASSWORD: wppassword
-
+      WORDPRESS_DB_HOST: ${WORDPRESS_DB_HOST}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_REDIS_HOST', 'redis_cache');
+        define('WP_REDIS_PORT', 6379);
     volumes:
-      - db_data:/var/lib/mysql
+      - wp_data:/var/www/html
+    networks:
+      - frontend-net
+      - backend-net
+    depends_on:
+      - db
+      - redis_cache
 
+  redis_cache:
+    image: redis:alpine
+    container_name: redis_cache
+    restart: always
     networks:
       - backend-net
 
-  redis:
-    image: redis:7-alpine
-    container_name: wordpress-redis
+  db:
+    image: mariadb:10.11
+    container_name: db_container
     restart: always
-
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
     networks:
       - backend-net
 
   minio:
-    image: minio/minio
-    container_name: wordpress-minio
+    image: minio/minio:latest
+    container_name: minio_storage
     restart: always
-
-    command: server /data --console-address ":9001"
-
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-
-    volumes:
-      - minio_data:/data
-
     ports:
       - "9000:9000"
       - "9001:9001"
-
-    networks:
-      - backend-net
-
-  wordpress:
-    image: wordpress:6.5-apache
-    container_name: wordpress-app
-    restart: always
-
-    depends_on:
-      - wordpress-db
-      - redis
-      - minio
-
-    ports:
-      - "8080:80"
-
     environment:
-      WORDPRESS_DB_HOST: wordpress-db
-      WORDPRESS_DB_USER: wpuser
-      WORDPRESS_DB_PASSWORD: wppassword
-      WORDPRESS_DB_NAME: wordpressdb
-
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
-      - wordpress_data:/var/www/html
-
+      - minio_data:/data
+    command: server /data --console-address ":9001"
     networks:
       - frontend-net
-      - backend-net
 
 volumes:
-  wordpress_data:
+  wp_data:
   db_data:
   minio_data:
 
 networks:
   frontend-net:
     driver: bridge
-
   backend-net:
     driver: bridge
